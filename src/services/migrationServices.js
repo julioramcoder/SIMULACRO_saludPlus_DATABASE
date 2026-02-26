@@ -5,10 +5,8 @@ import {parse} from "csv-parse/sync"; // viene de una libreria externa, toma el 
 import {pool} from "../config/postgres.js"; // llaamos el pool para las conexiones con la base de datos de postgreSQl, para poder inser, gaurdar datos en la base de datos
 import { env } from "../config/env.js"; // aqui gaurdamos las variables de entorno
 import { getMongoDb } from "../config/mongodb.js";// con esta funcion devolvemos la conexion a mongo db
-import { ReturnDocument } from "mongodb";
 import { migration } from "./migration.js";
-import { clear } from "console";
-import { read } from "fs";
+
 
 //BLQUE #2 CON ESTO PODEMOS CREAR FUNCIONES QUE NOS PERMITE LIMPIAR Y ACOMODAR LOS DATOS ANTES DE GUARDARLOS EN LA BASE DE DATOS
 
@@ -191,7 +189,7 @@ for (const r of normalizedRows){ // aqui normalizedRows es el arrays limpio que 
         RETURNING id;
          `;
         const {rows: out} = await client.query(q,[d.name, d.email, d.specialty]);
-        doctorByEmail.set(d.email, out[0].id);
+        doctorByEmail.set(d.email, out[0].id); // aqui se sube la clave valor 
     }
 
     // 4.3 Insurances -> name -> id
@@ -207,4 +205,163 @@ for (const r of normalizedRows){ // aqui normalizedRows es el arrays limpio que 
       const { rows: out } = await client.query(q, [i.name, i.coverage_percentage]);
       insuranceIdByName.set(i.name, out[0].id);
     }
-}
+
+     // =========================
+    // 5) INSERT APPOINTMENTS (UPSERT por appointment_id)
+    // =========================
+    // EN ESTE BLOQUE INSERTAMOS LAS CITAS MEDICAS (UPSERT USANDO LOS IDS QUE YA CAPTURAMOS), EN ESTE CASO LO QUE SE HACE ES RECORRER CADA FILA DEL CSV Y LO CONVIERTE EN UNA CITA EN LA TABLA APPOINTMENT, EN SI LA INFORMACION DESORGANIZADA REPRESENTAN CITA MEDICAS, CONECTANDOLA CON LA TABLA DE PACIENTES, DOCTOR Y SEGUROS MEDICOS 
+
+    for (const r of normalizedRows) {
+        const patientId = patientIdByEmail.get(r.patientEmail);
+        const doctorId = doctorIdByEmail.get(r.doctorEmail);
+        const insuranceId = insuranceIdByName.get(r.insuranceProvider)?? null; // se devulve null porque una cita puede no tener seguro 
+    } // aqui estamnos obteniendo los id de paciente, email y del seguro O "CONVIORTIENDOLA"
+
+
+    // ahora vamos a insertar el SQL que hicimos en nuestra base de datos de la parte appointment, dentro dela tabla de appointment vamos a crear las relaciones correctamente al ser una tabla relacional, el SQL se arma como string poprque esta instruccion se enviara a postgres
+
+    const q=`        INSERT INTO appointments (
+          appointment_id, appointment_date,
+          patient_id, doctor_id, insurance_id,
+          treatment_code, treatment_description, treatment_cost,
+          amount_paid
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        ON CONFLICT (appointment_id) DO UPDATE SET
+          appointment_date = EXCLUDED.appointment_date,
+          patient_id = EXCLUDED.patient_id,
+          doctor_id = EXCLUDED.doctor_id,
+          insurance_id = EXCLUDED.insurance_id,
+          treatment_code = EXCLUDED.treatment_code,
+          treatment_description = EXCLUDED.treatment_description,
+          treatment_cost = EXCLUDED.treatment_cost,
+          amount_paid = EXCLUDED.amount_paid;`;
+    // en la primera paerte del codigo del SQL le decimos que lista de colunas se van a llenar, ($1,$2,$3,....) estos son l os espacios para los 9 valores que se van a crear en un arrays, ON CONFLIC... esto quiere decir que no existe ningun conflicto, si no existe creala y si ya existe actualiza la informacion, evita duplicidad si ejecutamos la migracion varias veces 
+
+    await client.query(q, [ // aqui q dice, ejecuta el SQL guardado en q, 
+        r.appointmentId,
+        r.appointmentDate,
+        patientId,
+        doctorId,
+        insuranceId,
+        r.treatmentCode,
+        r.treatmentDescription,
+        r.treatmentCost,
+        r.amountPaid,
+    ]);
+
+
+
+    // esto funciona por pasos, primero al ser flujo de datos debemos dejar estipulado el await, entonces primero se manda el texto SQl, despues de mandan los valores de csv, postgre lo ejecuta, depsues posgre responde y y node recibe la respuesta
+
+// postgres termina de ejecutar el INSERT
+// VERIFICA LAS CLAVES FORANEAS
+// APLICA EL ON CONFLICT SI ES NECESARIO
+// GUARDA LA CITA EN LA BASE
+// DEVULVE UNA RESPUESTA, CUANDO TERMINE CON ESTO CONTINUA CON LA SIGUINTE CITA//
+
+
+    // =========================
+    // 6) MONGO: patient_histories (1 doc por paciente)
+    // =========================
+
+
+// MONGO ESTA DISEÑADO PARA GUARDAR ALGO QUE SEA FACIL DE CONSULTAR
+// EJEMPLO: DAME EL HISTORIAL COMPLETO DE PACIENTES, CON TODAS SUS CITAS EN UN SOLO OBJETO
+// EN POSTGRE ESO IMPLICA HACER VARIAS CONSULTAS Y UNIR TABLAS
+// MONGO GUARDA LOS DOCUMENTOS DE FORMA DIFERENTE
+// 1 DOCUEMNTO POR PACIENTE
+// TODAS LAS CITAS ADENTRO 
+// FACIL DE LEER Y DEVOLVER EN UNA API//
+
+// EN LA COLECCION PATIENTS_histories SE GUARDA UN DOCUMENTO POR PACIENTE Y DENTRO VA UN ARRREGLO APPOITMENT CON TODAS LAS CITAS
+
+
+    const historiesByEmail = new Map(); // EN MAP GAURDAREMOS LA CLAVE VALOR (EMAIL-DOC HISTORIAL DEL PACIENTE) pero esto es solo temporal y vivve en memoria no en mongo
+
+    for (const r of normalizedRows) { // obtnemos los valores normalizados con r es decir por fila individual del csv (una cita)
+
+        if (!historiesByEmail.has(r.patientEmail)) {
+            historiesByEmail.set(r.patientEmail, {
+                patientEmail: r.patientEmail,
+                appointment: [],
+            });
+        } // r.patientEmail es el email del paciente en esa cita/
+        // historiesbyemail.has es ya existe un historial para este paciente? y con el ! seria, si todavia no hemos creado un historial para este paciente
+        
+        //historiesByEmail.set(r.patientEmail, crea una entrada en el map /
+
+        // patientEmail: r.patientemail, lo que se esta haciendo es crear una etiqueta llamada patientemail y pongamosle el valor de emails que obtenemos con r de un valor ya normalizado
+
+    }
+
+
+    // AQUI LO QUE VAMOS A HACER ES AGREGAR CITAS AL HISRTORIAL DEL PACIENTE QUE YA TENEMOS
+    historiesByEmail.get(r.patientEmail).appointment.push({ 
+
+        // este objeto representa una cita medica y se inserta el valor normalizado que tenemos del csv
+        appointmentId: r.appointmentId,
+        date: r.appointmentDate,
+        doctorName: r.doctorName,
+        specialty: r.specialty,
+        treatmentCode: r.treatmentCode,
+        treatmentDescription: r.treatmentDescription,
+        treatmentCost: r.treatmentCost,
+        insuranceProvider: r.insuranceProvider,
+        coveragePercentage: r.coveragePercentage,
+        amountPaid: r.amountPaid
+    });
+    //historiesByEmail.get(r.patientEmail) historiesByEmail es el map donde guardamos los historiales, accedemos a la lista de citas  y metemeos la cita actual dentro de esa lista
+
+    //asi/
+    // historiesByEmail = Map {
+//   "juan@mail.com" => {
+//      patientEmail: "juan@mail.com",
+//      appointment: [
+//         { cita1 },
+//         { cita2 }
+//      ]
+//   },
+//   "ana@mail.com" => {
+//      patientEmail: "ana@mail.com",
+//      appointment: [
+//         { cita1 }
+//      ]
+//   }
+// }
+
+// historiesByEmail es un organizador temporal.
+
+// Cada valor dentro del Map es el historial del paciente.
+
+// Y appointment es simplemente la lista de citas dentro de ese historial
+
+
+// aqui lo que debemos hacer es gaurdar el historial em mongo, confirmar postgres, devvolver el resumen y manejar errores
+    const col = db.collection("patient_histories"); // aqui quiere decir que vamos trabjar con la cdoleccion de mongo de patients 
+    for (const doc of historiesByEmail.values()) { // recorre todos los historiales que contruimos en memeoria
+        await col.replaceOne({patientEmail: doc.patientEmail},doc,{upsert: true}); // guarda cada hostorial en mongo crear o actualziar
+        }
+
+        await client.query("COMMIT"); // con esto confirmamos todo lo de postgress
+// ahora costruiremos un resumen para decir,cuántos pacientes únicos se procesaron, cuántos doctores únicos, cuantois seguros unicos, cuantas citas,(filas del csv), cuantos historiales, y de donde se leyo
+    return {
+      ok: true,
+      message: "Migration completed successfully",
+      result: {
+        patients: patientsByEmail.size,
+        doctors: doctorsByEmail.size,
+        insurances: insByName.size,
+        appointments: normalizedRows.length,
+        histories: historiesByEmail.size,
+        csvPath,
+      },
+    };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err; // si algo falla deshacer el postgres y lanzar un error 
+  } finally { // pase lo que pase vas a hacer lo siguiente que seria 
+    client.release(); // devulve la conexion de postgress
+  }
+
+
