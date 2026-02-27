@@ -52,14 +52,14 @@ async function propagateDoctorChangeToMongo({ oldEmail, newEmail, newName, newSp
   // Actualiza solo elementos del array que coinciden con oldEmail (arrayFilters)
   // Cambia doctorEmail y/o doctorName y specialty según venga
   const setDoc = {}; // aqui armamos el $set dinamico, solo ponemos lo que realmente cambio
-  if (newEmail) setDoc["appointments.$[elem].doctorEmail"] = newEmail; // si cambio email, actualiza solo los elementos del array donde el doctorEmail era el viejo
-  if (newName) setDoc["appointments.$[elem].doctorName"] = newName; // si cambio nombre, igual actualiza dentro del array
-  if (newSpecialty) setDoc["appointments.$[elem].specialty"] = newSpecialty; // si cambio especialidad, actualiza
+if (newEmail) setDoc["appointment.$[elem].doctorEmail"] = newEmail;
+if (newName) setDoc["appointment.$[elem].doctorName"] = newName;
+if (newSpecialty) setDoc["appointment.$[elem].specialty"] = newSpecialty;// si cambio especialidad, actualiza
 
   if (Object.keys(setDoc).length === 0) return; // si no hay nada que cambiar, salimos y no pegamos a mongo innecesariamente
 
   await col.updateMany( // updateMany porque un doctor puede estar en muchos historiales y muchas citas
-    { "appointments.doctorEmail": oldEmail }, // filtro principal, solo docs que tengan alguna cita con ese email
+    { "appointment.doctorEmail": oldEmail }, // filtro principal, solo docs que tengan alguna cita con ese email
     { $set: setDoc }, // aplicamos el set dinamico
     { arrayFilters: [{ "elem.doctorEmail": oldEmail }] } // arrayFilters es para que solo cambie los elementos que coinciden, no todo el arreglo
   );

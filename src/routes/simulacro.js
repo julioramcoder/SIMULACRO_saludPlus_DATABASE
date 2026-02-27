@@ -2,7 +2,7 @@
 
 import { Router } from "express"; 
 const router = Router(); // esto crea una instancia, es comoc crear un mini-servidor dentro del servidor principal, esto nos sirve para organizar todas las rutas, debido a que cada ruta debe estar separada
-import { migration } from "../services/migrationServices";
+import { migration } from "../../src/services/migrationServices.js";
 
 // cuandoi alguien haga una peticion a router, enviales el mensaje de que estamos trabajando 
 router.get ("/", (req, res) => {
