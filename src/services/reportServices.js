@@ -10,7 +10,7 @@ import { isValidISODate } from "../utils/validators.js";
 // ejemplo invalido 31-01-2025 o hola
 
 
-export async function getRevenueReport({ startDate, endDate } = {}) { 
+export async function getRevenueReport({ startDate, endDate } = {}) {   
   // esta funcion genera un REPORTE DE INGRESOS, puede recibir fechas opcionales para filtrar por periodo
   // si no recibe nada calcula todo el historial
 
@@ -82,12 +82,15 @@ export async function getRevenueReport({ startDate, endDate } = {}) {
 
   const totalRevenue = Number(totalRes.rows[0]?.total_revenue ?? 0);
   // postgres a veces devuelve numeros como texto, por eso convertimos a Number, si por alguna razon viene null usamos 0
+  // aqui estamos diciendo pool.query(totalSql, params) ejecuta la consulta que esta guardada en la variable
 
 
   // ============================
   // 4 INGRESOS AGRUPADOS POR SEGURO
   // ============================
-
+ 
+  // del dinero que entro ¿cuanto de ese dinero vino de cada seguro y cuantas citas aporto cada uno
+  
   const bySql = `
     SELECT
       COALESCE(i.name, 'SinSeguro') AS insurance_name,

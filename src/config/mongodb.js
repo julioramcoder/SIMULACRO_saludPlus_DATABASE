@@ -1,4 +1,5 @@
-import { MongoClient } from "mongodb"; // mongo client es el contenedor oficial para comunicarnos con MongoDB
+import { MongoClient } from "mongodb"; // mongo client es el contenedor oficial para comunicarnos con MongoDB, esto ya es algo que instalamos externo 
+
 import {env} from "./env.js" // aqui tenemos nuestras variables de entorno 
 
 // lo que hacemos es crear la conexion a mongo usando la URL que definimos en .env.js
@@ -14,13 +15,15 @@ let db; // la base de datos que ya se selecciono de
 export async function connectMongo() {
     if (db) return db; // si existe una conexion la devuelve inmediato
 
-// aqui creamos un cliente usando la direccion de mongo y esto crea la conexion al servidor
+// aqui creamos un cliente usando la direccion de mongo 
     client = new MongoClient(env.MONGODB_URI);
-    await client.connect();
+    await client.connect();// y esto crea la conexion al servidor
 
-    db = client.db(env.MONGODB_DB); //seleccionamos la base de datos que vamos a usar 
+    db = client.db(env.MONGODB_DB); // el cliente ya esta conectado ahora si seleccionamos la base de datos que vamos a usar 
+    // aqui ya tengo una comunicacion de mi cliente node js, con la base de datos, ya hay intercomunacion que me permite trabjar desde mi applicativo con la base de datos 
 
-    await db.collection("patient_histories").  createIndex(
+
+    await db.collection("patient_histories").createIndex(
         {patientEmail: 1},
         {unique: true}
     ); // creamos un indice en el campo, para realizar busquedas por email mas rapido

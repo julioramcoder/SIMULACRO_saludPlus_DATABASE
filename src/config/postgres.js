@@ -12,3 +12,14 @@ export const pool = new Pool({
   connectionString: env.DATABASE_URL,
 });
 
+//pg lo usamos para Insertar datos
+
+// Actualizar datos
+
+// Eliminar datos
+
+// Crear tablas
+
+// Crear índices
+
+// Hacer cualquier instrucción SQL

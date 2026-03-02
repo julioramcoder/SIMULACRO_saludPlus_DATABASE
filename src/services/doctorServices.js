@@ -52,7 +52,7 @@ async function propagateDoctorChangeToMongo({ oldEmail, newEmail, newName, newSp
   // Actualiza solo elementos del array que coinciden con oldEmail (arrayFilters)
   // Cambia doctorEmail y/o doctorName y specialty según venga
   const setDoc = {}; // aqui armamos el $set dinamico, solo ponemos lo que realmente cambio
-if (newEmail) setDoc["appointment.$[elem].doctorEmail"] = newEmail;
+if (newEmail) setDoc["appointment.$[elem].doctorEmail"] = newEmail; // "appointment.$[elem].doctorEmail" ESTO QUIERE DECIR, dentro del array apoitment, busca el elemento que coicida con el filtro y actualiza el campo doctor email
 if (newName) setDoc["appointment.$[elem].doctorName"] = newName;
 if (newSpecialty) setDoc["appointment.$[elem].specialty"] = newSpecialty;// si cambio especialidad, actualiza
 
@@ -93,8 +93,8 @@ export async function updateDoctor(id, payload) { // esta funcion actualiza un d
 
   // Construir UPDATE dinámico (solo campos enviados)
   const fields = []; // aqui guardamos los pedazos del SET, ej name = $1, email = $2
-  const values = []; // aqui guardamos los valores reales, en el mismo orden de los placeholders
-  let idx = 1; // contador de parametros, se usa para armar $1 $2 $3
+  const values = []; // aqui guardamos los valores reales ejemplo juan, julio@saludplus..., en el mismo orden de los placeholders
+  let idx = 1; // contador de parametros, se usa para armar $1 $2 $3 o tambien llamados los places holders
 
   if (name !== undefined) { fields.push(`name = $${idx++}`); values.push(name); } // si vino name, lo agregamos
   if (newEmail !== undefined) { fields.push(`email = $${idx++}`); values.push(newEmail); } // si vino email, lo agregamos
@@ -102,10 +102,12 @@ export async function updateDoctor(id, payload) { // esta funcion actualiza un d
 
   if (fields.length === 0) throw new HttpError(400, "No fields to update"); // si no mandaron nada, no hay update, entonces error
 
-  values.push(doctorId); // el ultimo valor es el id para el WHERE
+  values.push(doctorId); // el ultimo valor es el id para el WHERE y al estar creando dinamicamente el sql, entonces recordemos que el el id va en el where y este va debajo de los set
 
   // Transacción: update SQL + propagación Mongo
   const client = await pool.connect(); // pedimos un client, porque con pool.query no controlamos bien la transaccion en varios pasos
+
+  // en esta parte del codigo se intentara hacer un proceso  que se debe hacer completo si falla algo todo falla, o se sube o se sube completo 
   try {
     await client.query("BEGIN"); // iniciamos transaccion, todo o nada en postgres
 
@@ -116,7 +118,7 @@ export async function updateDoctor(id, payload) { // esta funcion actualiza un d
       RETURNING id, name, email, specialty
     `; // q es el update final, se arma dinamico, idx aqui apunta al placeholder del WHERE
 
-    const { rows } = await client.query(q, values); // ejecutamos update con valores parametrizados
+    const { rows } = await client.query(q, values); // ejecutamos update con valores parametrizados se sube al postgre
 
     if (rows.length === 0) throw new HttpError(404, "Doctor not found"); // por seguridad, si no actualizo nada, entonces no existe el doctor
 
@@ -125,21 +127,28 @@ export async function updateDoctor(id, payload) { // esta funcion actualiza un d
 
     await client.query("COMMIT"); // confirmamos el update en postgres, ya queda persistido
 
-    // Propaga a Mongo DESPUÉS de confirmar SQL (consistencia eventual controlada)
+    // Propaga a Mongo DESPUÉS de confirmar SQL (consistencia eventual controlada) aqui se hace la pregunta de, realmente algo cambio? esto es una validacion.
+
     const emailChanged = newEmail !== undefined && oldEmail !== updated.email; // cambio real de email
     const nameChanged = name !== undefined && current.name !== updated.name; // cambio real de nombre
     const specChanged = specialty !== undefined && current.specialty !== updated.specialty; // cambio real de especialidad
 
+        // si almenos uno de los 3 cambios ocurrio entonces sincronizamos con mongo
     if (emailChanged || nameChanged || specChanged) { // si algo cambio, sincronizamos mongo
-      await propagateDoctorChangeToMongo({
+      await propagateDoctorChangeToMongo({ // esta funcion lo que hace es buscar en mongo todos los docs donde hayan citas con el doctor
+
+        // ahora usaremos un operador ternario
         oldEmail, // buscamos con el email viejo
-        newEmail: emailChanged ? updated.email : undefined, // solo mandamos lo que cambio, si no cambio mandamos undefined
+        newEmail: emailChanged ? updated.email :// PARA ENTENDER, PREGUNTAMOS HUBO UN CAMBIO DE EMAIL? SI ES TRUE ENTONCES ENVIA A MONGO EL CORREO VIEJO Y EL NUEVO Y ESTE LO CAMBIARA, SI NO HUMBO CAMBIOO SOLO HARA UNDERFIND
+        
+        
+        undefined, // solo mandamos lo que cambio, si no cambio mandamos undefined
         newName: nameChanged ? updated.name : undefined,
         newSpecialty: specChanged ? updated.specialty : undefined,
       });
     }
 
-    return updated; // devolvemos al cliente el doctor actualizado
+    return updated; // devolvemos al cliente el doctor actualizado 
   } catch (err) {
     await client.query("ROLLBACK"); // si algo falla, deshacemos la transaccion en postgres
 

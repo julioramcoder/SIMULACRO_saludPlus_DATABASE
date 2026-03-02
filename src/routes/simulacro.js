@@ -12,7 +12,7 @@ router.get ("/", (req, res) => {
 
 // este end point dispara la migracion,AQUI SE CREA UNA RUTA EN API, CUANDO ALGUIEN HAGA UNA PETICION EN HTTP TIPO POST, ESTO SE EHJECUTA CON LA FUNCION MIGRATION 
 
-router.post("/migrate", async (req, res) => { // la peticion migrate esta hecha para leet csv, insertar pacientes, insertar doctores, insertar citas, crear historial en mongo, es un bonton que dice corre todo el proceso de migracion ahora, CLEAR BEFORE ESTA para preguntar, antes de migrar quiero borrar todo o no? es true la migracion  hace TRUNCATE
+router.post("/migrate", async (req, res) => { // la peticion migrate esta hecha para leer csv, insertar pacientes, insertar doctores, insertar citas, crear historial en mongo, es un bonton que dice corre todo el proceso de migracion ahora, CLEAR BEFORE ESTA para preguntar, antes de migrar quiero borrar todo o no? es true la migracion  hace TRUNCATE
   try { // intentamos ejecutar la migracion
     const clearBefore = Boolean(req.body?.clearBefore); // lee el req lo convierte en true o false lo guarda en clearbefore 
     const out = await migration(clearBefore); // usa la respuesta y llama la fucnion migration y se hace lo que se pidio y lo que devulve se guarda en out

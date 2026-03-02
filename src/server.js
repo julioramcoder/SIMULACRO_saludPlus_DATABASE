@@ -10,7 +10,7 @@ async function main() {
 
     //await migration()
 
-    // aqui comenzamos a escuchar peticiones en el puerto 
+    // aqui comenzamos a escuchar peticiones en el puerto AQUI LEVANTAMOS A LA API
     app.listen(env.PORT, ()=> {
         console.log(`API running on htttp://localhost:${env.PORT}`); // {env.port...} esto seria el puerto seleccionado 
     });
@@ -23,4 +23,4 @@ console.error("fatal error", err);
 process.exit(1); // esta parte de process dice, apaga la aplicacion de inmediato 
 });
 
-
+//SERVER EL INTERRUPTOR QUE ENCIENDE TODO EL RESTAURANTE 
